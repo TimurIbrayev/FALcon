@@ -1,7 +1,7 @@
 # FALcon
 Active object localization framework incorporating the bio-plausible mechanisms of foveation and saccades for improved and resilient weakly supervised object localization.
 
-The paper can be found at [this link](https://openreview.net/pdf?id=qUfLsi3Vlm)
+The paper can be found at [this link](https://openreview.net/pdf?id=qUfLsi3Vlm).
 
 The code and data will be available after NeurIPS2023.
 
