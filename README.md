@@ -7,4 +7,4 @@ The code and data will be available after NeurIPS2023.
 
 
 # Contact Information
-Please, do not hesistate to reach out the corresponding author, Timur Ibrayev, via [email](mailto:tibrayev@purdue.edu?subject=[GitHub]%20FALcon%20repo) or on [LinkedIn](https://www.linkedin.com/in/timuribrayev)
+Please, do not hesitate to reach out the corresponding author, Timur Ibrayev, via [email](mailto:tibrayev@purdue.edu?subject=[GitHub]%20FALcon%20repo) or on [LinkedIn](https://www.linkedin.com/in/timuribrayev)
