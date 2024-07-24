@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Mar 20 22:40:10 2022
+Verified on May 25 2022
+
+
+@author: tibrayev
+"""
+
+from collections import namedtuple
+import csv
+from functools import partial
+from itertools import compress
+import torch
+import os
+import PIL
+import copy
+import numbers
+from collections.abc import Sequence
+import math
+
+from typing import Any, Callable, List, Optional, Union, Tuple
+from torchvision.datasets.vision import VisionDataset
+from torchvision.datasets.utils import verify_str_arg
+from torchvision import transforms
+import torchvision.transforms.functional as F
+from utils_dataloaders import custom_Compose
+
+CSV = namedtuple("CSV", ["header", "index", "data"])
+
+
+class CUBirds_2011(VisionDataset):
+    """`Caltech-UCSD Birds-200-2011 <http://www.vision.caltech.edu/visipedia/CUB-200-2011.html>` Dataset.
+    
+    Args:
+        root (string): Root directory where images are downloaded to.
+        split (string): One of {'train', 'test', 'all'}.
+            Accordingly dataset is selected.
+        target_type (string or list, optional): Type of target to use, ``class``, ``attr``, ``bbox``,
+            or ``parts (Not implemented!)``. Can also be a list to output a tuple with all specified target types.
+            The targets represent:
+                
+                - ``class`` (int): one of 200 classes images are categorized into
+                - ``attr`` (np.array shape=(312,) dtype=int): binary (0, 1) labels for attributes
+                - ``bbox`` (np.array shape=(4,) dtype=float): bounding box (x, y, width, height)
+                - ``parts`` (Not Implemented!): (x, y) coordinates of parts of objects
+            
+            Defaults to ``class``.
+        
+        transform (callable, optional): A function/transform that  takes in an PIL image
+            and returns a transformed version. E.g, ``transforms.ToTensor``
+        target_transform (callable, optional): A function/transform that takes in the
+            target and transforms it.
+            
+        This dataloader assumes that the data is already downloaded and unzipped in the root directory provided.
+    """
+    
+    base_folder = "CUB_200_2011"
+    
+    def __init__(
+            self,
+            root: str,
+            split: str = "train",
+            target_type: Union[List[str], str] = "class",
+            transform: Optional[Callable] = None,
+            target_transform: Optional[Callable] = None,
+            pseudo_bbox_dir = None,
+    ) -> None:
+
+        # in order to take into account possibility of image being resized and/or flipped,
+        # and hence, requiring bounding box to be reszied and/or flipped accordingly,
+        # this dataloader works only with custom_Compose transform (see in custom_tvision_utils.py)
+        if (transform is not None) and (not isinstance(transform, custom_Compose)):
+            # in case transform is not wrapped into transforms.Compose,
+            # then, we can simply wrap it into custom_Compose
+            if not isinstance(transform, transforms.Compose):
+                if isinstance(transform, list):
+                    transform = custom_Compose(transform) # transform is already a list of transforms
+                else:
+                    transform = custom_Compose([transform]) # transform is only a single transform (e.g. transforms.ToTensor())
+            # else, we assume that the transform is already wrapped into transforms.Compose 
+            # and throw error
+            else:
+                raise ValueError("Expected either list of transforms or set of transforms wrapped into custom_Compose")        
+
+        super(CUBirds_2011, self).__init__(root, transform=transform,
+                                           target_transform=target_transform)
+        
+        self.split = split
+        
+        if isinstance(target_type, list):
+            self.target_type = target_type
+        else:
+            self.target_type = [target_type]
+        if "parts" in self.target_type:
+            raise NotImplementedError("target_type 'parts' is not implemented by the current loader!")
+        if not self.target_type: # in case of empty list as target_type
+            self.target_type.append("class")
+        
+        split_map = {
+            "train": 1,
+            "test": 0,
+            "valid": 2,
+            "trainval": (1, 2),
+            "all": None}
+        
+        split_ = split_map[verify_str_arg(split.lower(), "split",
+                                         ("train", "test", "valid", "all", "trainval"))]
+        
+        # fetching.
+        splits          = self._load_csv("train_test_val_split.txt",data_type='int')
+        filename        = self._load_csv("images.txt",              data_type='str')
+        labels          = self._load_csv("image_class_labels.txt",  data_type='int')
+        label_names     = self._load_csv("classes.txt",             data_type='str')
+        gt_bboxes       = self._load_csv("bounding_boxes.txt",      data_type='float')
+        attr            = self._load_csv("attributes/image_attribute_labels.txt", data_type='int', specific_columns=[1, 3])
+        attr_names      = self._load_csv("attributes/attributes.txt", data_type='str')    
+        if not pseudo_bbox_dir is None:
+            self.pseudo_bbox_dir    = pseudo_bbox_dir
+            self.pseudo_bboxes      = self._load_pseudo_boxes(self.pseudo_bbox_dir) # expected format: "filename": [x,y,w,h]
+
+
+        # pre-processing.
+        if split_ is None:
+            mask            = slice(None)
+            self.filename   = [fname[0] for fname in filename.data]
+        else:
+            if isinstance(split_, tuple):
+                mask            = torch.logical_or((splits.data == split_[0]).squeeze(), (splits.data == split_[1]).squeeze())
+            else:
+                mask            = (splits.data == split_).squeeze()
+            self.filename   = [fname[0] for fname, m in zip(filename.data, mask) if m]
+        self.labels         = (labels.data[mask] - 1).squeeze() # dataset labels start from 1
+        self.label_names    = {int(k)-1: v[0] for k, v in zip(label_names.index, label_names.data)}
+        self.gt_bboxes      = gt_bboxes.data[mask]
+        self.attr           = attr.data.reshape(len(filename.index), len(attr_names.index), 2)[:, :, -1][mask]
+        self.attr_names     = {int(k)-1: v[0] for k, v in zip(attr_names.index, attr_names.data)}
+        self.fetch_one_bbox = True
+
+    
+    def _load_pseudo_boxes(self, path_to_boxes):
+        filenamed_pseudo_bboxes = {}
+        with open(path_to_boxes) as csv_file:
+            data = list(csv.reader(csv_file, delimiter=' ', skipinitialspace=True))
+
+        for data_line in data:
+            filenamed_pseudo_bboxes[data_line[0]] = [float(data_line[i]) for i in range(1, 5)]
+        return filenamed_pseudo_bboxes
+
+    def _load_csv(
+                        self,
+                        filename: str,
+                        header: Optional[int] = None,
+                        data_type: Optional[str] = 'int',
+                        specific_columns: Optional[List[int]] = None,
+                  ) -> CSV:
+        data, indices, headers = [], [], []
+
+        fn = partial(os.path.join, self.root, self.base_folder)
+        with open(fn(filename)) as csv_file:
+            data = list(csv.reader(csv_file, delimiter=' ', skipinitialspace=True))
+
+        if header is not None:
+            headers = data[header]
+            data = data[header + 1:]
+
+        indices = [row[0] for row in data]
+        if specific_columns is not None:        
+            data = [row[specific_columns[0]:specific_columns[1]] for row in data]
+        else:
+            data = [row[1:] for row in data]
+        if data_type=='int':
+            data_int = [list(map(int, i)) for i in data]
+            return CSV(headers, indices, torch.tensor(data_int))
+        elif data_type=='float':
+            data_int = [list(map(int, map(float, i))) for i in data]
+            return CSV(headers, indices, torch.tensor(data_int))
+        elif data_type=='str':
+            return CSV(headers, indices, data)
+
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        X = PIL.Image.open(os.path.join(self.root, self.base_folder, "images", self.filename[index]))
+        
+        if X.mode != 'RGB': # some of the images in the birds dataset are black and white
+            X = X.convert("RGB")
+        
+        if any(target in ('gt_bbox', 'pseudo_bbox') for target in self.target_type):
+            assert (not (('gt_bbox' in self.target_type) and ('pseudo_bbox' in self.target_type))), "Only gt_bbox or pseudo_bbox can be requested at a time, but requested both!"
+            if 'gt_bbox' in self.target_type:
+                bbox = self.gt_bboxes[index, :].unsqueeze(0)
+            elif 'pseudo_bbox' in self.target_type:
+                bbox = torch.tensor(self.pseudo_bboxes[self.filename[index]]).unsqueeze(0)
+        else:
+            bbox = None        
+
+        w, h = X.size
+        if self.transform is not None:
+            X, bbox = self.transform(X, bbox)
+
+        # NOTE: we unsqueeze bbox above and squeeze here to be consistent with bbox augmentations for the case when there are multiple bboxes
+        # NOTE: for CUB, this is useless, since CUB only has one bbox per image annotated. Yet, we keep this piece below for consistency.
+        if bbox is not None:
+            if self.fetch_one_bbox:
+                bbox_areas = bbox[:, 2]*bbox[:, 3]
+                largest_bbox_id = bbox_areas.argmax().item()
+                bbox = bbox[largest_bbox_id, :]
+            
+        
+        target: Any = []
+        for t in self.target_type:
+            if t == "class":
+                target.append(self.labels[index])
+            elif t == "attr":
+                target.append(self.attr[index, :])
+            elif t == "gt_bbox":
+                target.append(bbox)   
+            elif t == 'filename':
+                target.append(self.filename[index])
+            elif t == 'pseudo_bbox':
+                target.append(bbox)
+            elif t == 'original_wh':
+                target.append(torch.tensor([w, h]))
+            else:
+                raise ValueError("Target type \"{}\" is not recognized.".format(t))
+
+        target = tuple(target) if len(target) > 1 else target[0]
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        
+        return X, target
+    
+    def __len__(self) -> int:
+        return len(self.filename)
+    
+    def extra_repr(self) -> str:
+        lines = ["target type: {target_type}", "Split: {split}"]
+        return '\n'.join(lines).format(**self.__dict__)
+    
+    
+# def split_train_into_train_and_valid():
+#     data    = CUBirds_2011('/home/nano01/a/tibrayev/CUB_200-2011_raw/', split = 'train', target_type = ['class', 'bbox'])
+#     splits  = data._load_csv("train_test_split.txt", data_type='int')
+#     labels  = data._load_csv("image_class_labels.txt",  data_type='int')    
+#     sample_cnt_per_class = {k: (data.labels==k).sum().item() for k in range(200)}
+#     num_of_samples_for_validation = 3
+#     selected_for_validation = []
+#     sample_cnt_preceding = 0
+#     for c in range(200):
+#         selected_indices = torch.randperm(sample_cnt_per_class[c])[:num_of_samples_for_validation].sort()[0]
+#         selected_for_validation.append(selected_indices + sample_cnt_preceding)
+#         sample_cnt_preceding += sample_cnt_per_class[c]
+#     selected_for_validation = torch.cat(selected_for_validation)
+#     print("Samples selected for validation are: \n{}".format(selected_for_validation))
+    
+#     f = open('/home/nano01/a/tibrayev/CUB_200-2011_raw/CUB_200_2011/train_test_val_split.txt', 'w', buffering=1)
+#     cnt_train_samples_observed_so_far = 0
+#     cnt_valid_samples = 0
+#     valid_cnt_per_class = {k: 0 for k in range(200)} #for sanity check
+#     for l in range(len(splits.index)):
+#         index = splits.index[l]
+#         value = splits.data[l].item()
+#         if value == 1:
+#             if cnt_train_samples_observed_so_far in selected_for_validation:
+#                 value = 2
+#                 cnt_valid_samples += 1
+#                 valid_cnt_per_class[labels.data[l].item()-1] += 1
+#             cnt_train_samples_observed_so_far += 1
+#         f.write("{} {}\n".format(index, value))
+#     print("Completed split!")
+#     f.close()
+    
+#     # for sanity check
+#     splits_new  = data._load_csv("train_test_val_split.txt", data_type='int')
+#     mask        = (splits_new.data == 1).squeeze()
+#     labels_new  = (labels.data[mask] - 1).squeeze()
+#     train_cnt_per_class = {k: (labels_new==k).sum().item() for k in range(200)}
+#     for s, v, t in zip(sample_cnt_per_class.items(), valid_cnt_per_class.items(), train_cnt_per_class.items()):
+#         assert s[1] == v[1] + t[1]
+
+    
+
+
+
+
+
+
+
+
