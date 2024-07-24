@@ -1,9 +1,9 @@
-# FALcon
-Active object localization framework incorporating the bio-plausible mechanisms of foveation and saccades for improved and resilient weakly supervised object localization.
+# Exploring Foveation and Saccade for Improved Weakly-Supervised Localization
+**FALcon** is an active object localization framework incorporating the bio-plausible mechanisms of foveation and saccades for improved and resilient weakly supervised object localization.
 
-The paper can be found at [this link](https://openreview.net/pdf?id=qUfLsi3Vlm).
+The work was presented at _NeurIPS 2023 Workshop on Gaze Meets ML (GMML)_ and published at _Proceedings of Machine Learning Research (PMLR)_. The manuscript can be found at [this link](https://proceedings.mlr.press/v226/ibrayev24a/ibrayev24a.pdf).
 
-The code and data will be available after NeurIPS2023.
+This is the official repository providing the code, model weights, and data to enable reproducibility of the work.
 
 
 # Contact Information
