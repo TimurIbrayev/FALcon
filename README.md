@@ -2,16 +2,16 @@
 **FALcon** is an active object localization framework incorporating the bio-plausible mechanisms of foveation and saccades for improved and resilient weakly supervised object localization.
 
 The work was presented at _NeurIPS 2023 Workshop on Gaze Meets ML (GMML)_ and published at _Proceedings of Machine Learning Research (PMLR)_. The manuscript can be found at [this link](https://proceedings.mlr.press/v226/ibrayev24a/ibrayev24a.pdf).
-
+<div align="center">
+  <img src="FALcon_poster_NeurIPS23_GMML_snippet.jpg" alt="Poster Snippet" width="900"/>
+</div>
 This is the official repository providing the code, model weights, and data to enable reproducibility of the work.
-⠀⠀⠀⠀⠀
-
 
 ## Required Packages
 - Python 3.8 or higher
 - PyTorch 1.9 or higher
 
-## Required Data
+## Data
 The project works on the following datasets, with the files expected to be in the corresponding structures:
 
 <details>
@@ -73,11 +73,11 @@ The project works on the following datasets, with the files expected to be in th
 
 ## Usage
 
-▶ The framework is implemented as a set of separate script for each individual operation, e.g. ```FALcon_train_cub``` for training FALcon on CUB-200-2011 dataset samples.
+The framework is implemented as a set of separate script for each individual operation, e.g. ```FALcon_train_cub``` for training FALcon on CUB-200-2011 dataset samples.
 
-▶ The operations of different scripts are controlled by one of the configuration scripts, e.g. ```FALcon_config_cub``` for the operations on CUB-200-2011 dataset samples.
+The operations of different scripts are controlled by one of the configuration scripts, e.g. ```FALcon_config_cub``` for the operations on CUB-200-2011 dataset samples.
 
-▶Please, address the dropdown below for the short description of scripts and directories in the repository.
+Please, address the dropdown below for the short description of scripts and directories in the repository.
   <details>
   <summary>Descriptions of scripts</summary>
   
@@ -98,6 +98,8 @@ The project works on the following datasets, with the files expected to be in th
 
 _Please, note:_ the code in this repository was cleaned up and restructured for a better readibility, which might cause some errors with references to imports and/or data. If you face difficulties, please let us know by submitting an issue!
 
+## Model Weights
+▶ Please, use [this link](https://purdue0-my.sharepoint.com/:f:/g/personal/tibrayev_purdue_edu/EmflqrsUu5xEiomrjtCGsaABLYI-hRoQnCduhlQ41c6ffw) to find a shared OneDrive folder, which contain model parameters trained on CUB-200-2011 or ImageNet2012 datasets. The structure of the shared drive mirrors the structure of this repository, meaning that the ```.pth``` checkpoints should be placed into the corresponding folders.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
