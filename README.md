@@ -3,7 +3,7 @@
 
 The work was presented at _NeurIPS 2023 Workshop on Gaze Meets ML (GMML)_ and published at _Proceedings of Machine Learning Research (PMLR)_. The manuscript can be found at [this link](https://proceedings.mlr.press/v226/ibrayev24a/ibrayev24a.pdf).
 <div align="center">
-  <img src="FALcon_poster_NeurIPS23_GMML_snippet.jpg" alt="Poster Snippet" width="900"/>
+  <img src="poster/FALcon_poster_NeurIPS23_GMML_snippet.jpg" alt="Poster Snippet" width="900"/>
 </div>
 This is the official repository providing the code, model weights, and data to enable reproducibility of the work.
 
